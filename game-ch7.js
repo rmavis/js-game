@@ -4,6 +4,17 @@
   - item cells
   - characters push each other, item cells, etc
   - items cells have other rules
+
+  Could have compound land cells, passed in instructions as arrays, placed in ascending order. In this way items can be placed on land. Items don't need to have the shape/dimensions of land cells.
+  Cells could have onOccupy, onLeave functions. Pushing a cell could called onOccupy.
+  If no two non-land cells can occupy the same space, then the coordinates can be used as keys of an object that correlates coordiates with objects, which is an efficient structure for that.
+  Can move chars by amounts unattached to char's dimensions.
+
+  Plan for edge detection:
+  - get the coordinates of the character/item's next movement
+  - scan all chars/items, check their coordinates, bounds are top + height, left + width, check if new coords are within those (between top and (top + height), left and (left + width))
+  - if within bounds, fire onOccupy action
+  - else, not
 */
 
 
@@ -121,8 +132,17 @@ function Game(conf) {
 
 
 
+    /*
+     * IMPORTANT
+     *
+     * This object must contain an entry for every character legal
+     * in the map instructions init parameter.
+     *
+     * THANK YOU
+     */
     function getMapKey() {
         return {
+            " ": LandCell,
             "-": PathCell,
             "%": ForestCell,
             ".": DesertCell,
@@ -175,23 +195,6 @@ function Game(conf) {
 
 
 
-    function getEmptyMapCoords(cells, n) {
-        // n = (n === undefined) ? 0 : n;
-        // console.log("Getting random map position, attempt " + n);
-
-        var row = getRandomIntInclusive(0, (cells.length - 1)),
-            col = getRandomIntInclusive(0, (cells[0].length - 1));
-
-        if (isMapCellEmpty(cells[row][col])) {
-            return [row, col];
-        }
-        else {
-            return getEmptyMapCoords(cells, (n + 1));
-        }
-    }
-
-
-
     function areCoordsLegal(cells, coords) {
         return ((cells[coords[0]]) && (cells[coords[0]][coords[1]]));
     }
@@ -204,22 +207,13 @@ function Game(conf) {
 
 
 
-    function occupyMapCell(land, char) {
-        land.occupied_by = char;
-
-        if (land.occupy_action) {
-            land.occupy_action(char);
-        }
-    }
-
-
-
 
 
     /*
      * Character cells.
      */
 
+    // The generic character class.
     function CharacterCell(conf) {
         if (conf !== undefined) {
             for (key in conf) {
@@ -230,7 +224,13 @@ function Game(conf) {
         }
     }
 
+    // In the browser, Character cells will be classed `char__cell`
+    // and `char__cell--TYPE`, where TYPE is their `type`.
+    CharacterCell.prototype.type = 'generic';
+    // This will become a reference to the character's DOM element.
     CharacterCell.prototype.elem = null;
+    // This will become a four-item array of two-item arrays that
+    // together specify the character's x-y position on the map.
     CharacterCell.prototype.coords = null;
 
 
@@ -242,6 +242,7 @@ function Game(conf) {
 
     PlayerCharacter.prototype.type = 'player';
     PlayerCharacter.prototype.char = '@';
+    PlayerCharacter.prototype.onTouchAction = playerCaptureAction;
 
 
     function EnemyCharacter() {
@@ -252,6 +253,61 @@ function Game(conf) {
 
     EnemyCharacter.prototype.type = 'enemy';
     EnemyCharacter.prototype.char = '!';
+    EnemyCharacter.prototype.onTouchAction = enemyCaptureAction;
+
+
+
+    function playerCaptureAction(player, enemy) {
+        addClassToElem(enemy.elem, 'char__cell--dead');
+        removeEnemyFromLists(enemy);
+        if ($enemies.length == 0) {
+            winGame();
+        }
+    }
+
+    function enemyCaptureAction(enemy, char) {
+        addClassToElem(char.elem, 'char__cell--dead');
+        removeEnemyFromLists(char);
+        if (char === $player) {
+            endGame();
+        }
+    }
+
+
+    function removeEnemyFromLists(char) {
+        var _enemies = [ ];
+
+        for (var o = 0; o < $enemies.length; o++) {
+            if ($enemies[o] !== char) {
+                _enemies.push($enemies[o]);
+            }
+        }
+
+        $enemies = _enemies;
+        $characters = _enemies.concat([$player]);
+    }
+
+
+    function startFight() {
+    }
+
+    function pathOccupyAction() {
+    }
+
+    function forestOccupyAction() {
+    }
+
+    function desertOccupyAction() {
+    }
+
+    function mountainOccupyAction() {
+    }
+
+    function lavaOccupyAction() {
+    }
+
+    function waterOccupyAction() {
+    }
 
 
 
@@ -276,6 +332,7 @@ function Game(conf) {
     function makeCharacter(type) {
         var char = new type();
         char.elem = makeCharacterElement(char);
+        char.coords = getCharacterCoordsSet(char);
         return char;
     }
 
@@ -289,28 +346,80 @@ function Game(conf) {
 
 
 
-    function moveCharacterToCell(char, land, map) {
-        if (char.coords) {
-            occupyMapCell(map.cells[char.coords[0]][char.coords[1]], null);
-        }
+    function getCharacterCoordsSet(char, origin) {
+        origin = (origin === undefined) ? [0,0] : origin;
 
-        occupyMapCell(land, char);
-        char.coords = land.coords;
-        positionCharacterOnCell(char, land);
+        return [
+            [origin[0], origin[1]],
+            [(origin[0] + char.elem.offsetWidth), origin[1]],
+            [origin[0], (origin[1] + char.elem.offsetHeight)],
+            [(origin[0] + char.elem.offsetWidth), (origin[1] + char.elem.offsetHeight)]
+        ];
     }
 
 
 
-    function positionCharacterOnCell(char, land) {
-        // console.log(char);
-        // console.log(land.elem);
-        //         var pos = getScreenCoords(land.elem);
-        // console.log(pos);
-        // char.elem.style.left = pos.left + 'px';
-        // char.elem.style.top = pos.top + 'px';
+    function updateCharacterCoordsSet(char, origin) {
+        char.coords = getCharacterCoordsSet(char, origin);
+    }
 
-        char.elem.style.top = (land.coords[0] * 10) + 'vh';
-        char.elem.style.left = (land.coords[1] * 10) + 'vw';
+
+
+    function positionCharacterByCoords(char) {
+        char.elem.style.left = char.coords[0][0] + 'px';
+        char.elem.style.top = char.coords[0][1] + 'px';
+    }
+
+
+
+    function positionCharacterByRandom(map, chars, char, n) {
+        n = (n === undefined) ? 0 : n;
+
+        if (n > 9) {
+            console.log("Too many failed attempts to position character. Quitting.");
+            return null;
+        }
+
+        var x = getRandomIntInclusive(0, (map.elem.offsetWidth - char.elem.offsetWidth)),
+            y = getRandomIntInclusive(0, (map.elem.offsetHeight - char.elem.offsetHeight)),
+            touch = false;
+
+        out:
+        for (var o = 0; o < chars.length; o++) {
+            if (doCharactersTouch(chars[o], char)) {
+                touch = true;
+                break out;
+            }
+        }
+
+        if (touch) {
+            return positionCharacterByRandom(map, char, (n + 1));
+        }
+        else {
+            updateCharacterCoordsSet(char, [x, y]);
+            positionCharacterByCoords(char);
+            return true;
+        }
+    }
+
+
+
+    function doCharactersTouch(char_ref, char_act) {
+        var x_min = char_ref.coords[0][0],
+            x_max = char_ref.coords[1][0],
+            y_min = char_ref.coords[0][1],
+            y_max = char_ref.coords[2][1];
+
+        for (var o = 0; o < char_act.coords.length; o++) {
+            if ((char_act.coords[o][0] >= x_min) &&
+                (char_act.coords[o][0] <= x_max) &&
+                (char_act.coords[o][1] >= y_min) &&
+                (char_act.coords[o][1] <= y_max)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
@@ -318,8 +427,6 @@ function Game(conf) {
     function moveCharacterToCoordsIfLegal(coords, char, map) {
         if ((areCoordsLegal(map.cells, coords)) &&
             (isMapCellEmpty(map.cells[coords[0]][coords[1]]))) {
-            // console.log("Moving to:");
-            // console.log(map.cells[coords[0]][coords[1]]);
             moveCharacterToCell(char, map.cells[coords[0]][coords[1]], map);
             return true;
         }
@@ -331,8 +438,34 @@ function Game(conf) {
 
 
     function moveCharacterByVector(vector, char, map) {
-        var new_pos = [(char.coords[0] + vector[0]), (char.coords[1] + vector[1])];
-        moveCharacterToCoordsIfLegal(new_pos, char, map);
+        var new_pos = [
+            (char.coords[0][0] + (vector[0] * char.elem.offsetWidth)),
+            (char.coords[0][1] + (vector[1] * char.elem.offsetHeight))
+        ];
+
+        if (new_pos[0] < 0) {
+            new_pos[0] = 0;
+        }
+        if (new_pos[1] < 0) {
+            new_pos[1] = 0;
+        }
+        if (new_pos[0] >= (map.elem.offsetWidth - char.elem.offsetWidth)) {
+            new_pos[0] = (map.elem.offsetWidth - char.elem.offsetWidth);
+        }
+        if (new_pos[1] >= (map.elem.offsetHeight - char.elem.offsetHeight)) {
+            new_pos[1] = (map.elem.offsetHeight - char.elem.offsetHeight);
+        }
+
+        updateCharacterCoordsSet(char, new_pos);
+        positionCharacterByCoords(char);
+
+        for (var o = 0; o < $characters.length; o++) {
+            if (($characters[o] !== char) &&
+                (doCharactersTouch($characters[o], char))) {
+                console.log("Character " + char.elem.className + " touched " + $characters[o].elem.classname);
+                char.onTouchAction(char, $characters[o]);
+            }
+        }
     }
 
 
@@ -345,23 +478,17 @@ function Game(conf) {
             return null;
         }
 
-        var pos_pos = $possible_moves[getRandomIntInclusive(0, ($possible_moves.length - 1))],
-            new_pos = [(char.coords[0] + pos_pos[0]), (char.coords[1] + pos_pos[1])];
-
-        // console.log("New position: " );
-        // console.log(new_pos);
-
-        if (!moveCharacterToCoordsIfLegal(new_pos, char, map)) {
-            moveCharacterByRandom(char, map, (n + 1));
-        }
+        moveCharacterByVector(
+            $possible_moves[getRandomIntInclusive(0, ($possible_moves.length - 1))],
+            char,
+            map
+        );
     }
 
 
 
     function moveCharactersAtRandom(chars, map) {
         for (var o = 0; o < chars.length; o++) {
-            // console.log("Moving character");
-            // console.log(chars[o]);
             moveCharacterByRandom(chars[o], map, 0);
         }
     }
@@ -420,17 +547,19 @@ function Game(conf) {
      * Game init.
      */
 
-    var $enemies = [ ],
-        $player = null,
+    var $characters = [ ],
+        $enemies = [ ],
+        $player = null,        
         $map = {
             cells: [ ],
             elem: null
         };
 
+    // These are (y, x)
     var $possible_moves = [
-        [-1,-1], [-1,0], [-1,1],
-        [0,-1],  [0,0],  [0,1],
-        [1,-1],  [1,0],  [1,1],
+        [-1,-1], [0,-1], [1,-1],
+        [-1,0],  [0,0],  [1,0],
+        [-1,1],  [0,1],  [1,1],
     ];
 
     var $time_tick = 1000,
@@ -449,24 +578,23 @@ function Game(conf) {
 
         $player = makePlayer();
         $enemies = makeEnemies(conf.characters.enemy_count);
-        positionCharacters($map, $enemies.concat([$player]));
+        $characters = $enemies.concat([$player]);
 
+        positionCharacters($map, $characters);
         addEventListeners();
-        startMovingEnemies();
+        pauseGame();
     }
 
 
 
     function positionCharacters(map, chars) {
-        var map_rows = (map.cells.length - 1),
-            map_cols = (map.cells[0].length - 1);
+        var positioned = [ ];
 
         for (var o = 0; o < chars.length; o++) {
-            var coords = getEmptyMapCoords(map.cells, 0),
-                land = map.cells[coords[0]][coords[1]];
-
             map.elem.appendChild(chars[o].elem);
-            moveCharacterToCell(chars[o], land, map);
+            updateCharacterCoordsSet(chars[o]);
+            positionCharacterByRandom(map, positioned, chars[o]);
+            positioned.push(chars[o]);
         }
     }
 
@@ -474,6 +602,12 @@ function Game(conf) {
 
     function addEventListeners() {
         window.addEventListener('keydown', handleKeyDown);
+    }
+
+
+
+    function removeEventListeners() {
+        window.removeEventListener('keydown', handleKeyDown);
     }
 
 
@@ -506,13 +640,10 @@ function Game(conf) {
             evt.preventDefault();
             movePlayerRight();
             break;
-        case " " || "Spacebar":
+        case " " || "Spacebar" || "Escape":
             evt.preventDefault();
-            console.log("spacebar");
+            console.log("spacebar / esc");
             togglePause();
-            break;
-        case "Escape":
-            console.log("escape");
             break;
         }
     }
@@ -521,13 +652,63 @@ function Game(conf) {
 
     function togglePause() {
         if ($is_paused) {
-            startMovingEnemies();
+            resumeGame();
         }
         else {
-            stopMovingEnemies();
+            pauseGame();
         }
+    }
 
-        $is_paused = (!$is_paused);
+
+
+    function pauseGame() {
+        $is_paused = true;
+
+        stopMovingEnemies();
+
+        removeClassFromElem(
+            document.querySelector('.info__wrap--general'),
+            'info__wrap--hide'
+        );
+    }
+
+
+
+    function resumeGame() {
+        $is_paused = false;
+
+        startMovingEnemies();
+
+        addClassToElem(
+            document.querySelector('.info__wrap--general'),
+            'info__wrap--hide'
+        );
+    }
+
+
+
+    function endGame() {
+        removeEventListeners();
+
+        stopMovingEnemies();
+
+        removeClassFromElem(
+            document.querySelector('.info__wrap--game-over'),
+            'info__wrap--hide'
+        );
+    }
+
+
+
+    function winGame() {
+        removeEventListeners();
+
+        stopMovingEnemies();
+
+        removeClassFromElem(
+            document.querySelector('.info__wrap--game-won'),
+            'info__wrap--hide'
+        );
     }
 
 
@@ -543,6 +724,24 @@ function Game(conf) {
         min = Math.ceil(min);
         max = Math.floor(max);
         return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+
+
+    function addClassToElem(elem, _class) {
+        var arr = elem.className.split(' ');
+
+        if (arr.indexOf(_class) === -1) {
+            arr.push(_class);
+            elem.className = arr.join(' ');
+        }
+    }
+
+
+
+    function removeClassFromElem(elem, _class) {
+        var regex = new RegExp("[ ]*" + _class, 'g');
+        elem.className = elem.className.replace(regex, '');
     }
 
 
@@ -598,31 +797,6 @@ function Game(conf) {
 
 
 
-    function startFight() {
-    }
-
-    function pathOccupyAction() {
-    }
-
-    function forestOccupyAction() {
-    }
-
-    function desertOccupyAction() {
-    }
-
-    function mountainOccupyAction() {
-    }
-
-    function lavaOccupyAction() {
-    }
-
-    function waterOccupyAction() {
-    }
-
-
-
-
-
     return init(conf);
 }
 
@@ -631,6 +805,20 @@ function Game(conf) {
 
 
 var _map_instructions = [
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+    [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+];
+
+/*
+[
     ['~','~','~','~','~','~','~','~','~','~'],
     ['~','^','^','^','%','%','%','%','-','~'],
     ['~','^','#','%','%','%','%','-','-','~'],
@@ -642,6 +830,7 @@ var _map_instructions = [
     ['~','-','.','.','.','^','^','^','-','#'],
     ['~','.','.','.','^','^','^','^','^','#'],
 ];
+*/
 
 
 var game = new Game({
@@ -650,6 +839,6 @@ var game = new Game({
         instructions: _map_instructions,
     },
     characters: {
-        enemy_count: 3,
+        enemy_count: 10,
     },
 });

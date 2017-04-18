@@ -68,8 +68,9 @@
              top: 0;
              left: 0;
              display: block;
-             width: 10vw;
-             height: 10vh;
+             width: 4vw;
+             height: 4vh;
+             opacity: 1;
              z-index: 1;
              transition: top 0.3s ease, left 0.3s ease;
          }
@@ -81,11 +82,89 @@
          .char__cell--enemy {
              background-color: magenta;
          }
+
+         .char__cell--dead {
+             background-color: red;
+             opacity: 0;
+             transition: opacity 0.5s ease;
+         }
+
+
+         .info__wrap {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             max-width: 50vw;
+             max-height: 80vh;
+             z-index: 10;
+             overflow: auto;
+             background-color: white;
+             color: black;
+             transition: transform 0.3s ease;
+         }
+
+         .info__wrap--hide {
+             transform: translate(-50%, -500%);
+             transition: transform 0.3s ease;
+         }
+
+         .info__body {
+             position: relative;
+             margin: 20px;
+             padding: 20px;
+             border: 1px solid;
+             text-align: left;
+             font-size: 17px;
+             line-height: 125%;
+         }
+
+         .info__body > p {
+             margin: 20px 0;
+             padding: 0;
+         }
+
+         .info__body > p:last-child {
+             margin-bottom: 0;
+         }
+
+         .info__header {
+             font-size: 150%;
+             margin: 0;
+             padding: 0;
+         }
         </style>
     </head>
 
 
     <body>
+        <div class="info__wrap info__wrap--general info__wrap--hide">
+            <div class="info__body info__body--general">
+                <h2 class="info__header">This is a great game</h2>
+                <p>Press the spacebar or escape to pause/resume.</p>
+                <p>Move your character with the arrow keys.</p>
+                <p>Touch the other characters to kill them!</p>
+                <p>If you're touched, you're dead.</p>
+                <p>Refresh the page to restart.</p>
+            </div>
+        </div>
+
+        <div class="info__wrap info__wrap--game-over info__wrap--hide">
+            <div class="info__body info__body--game-over">
+                <h2 class="info__header">Game over!</h2>
+                <p>You're dead.</p>
+                <p>Refresh the page to try again.</p>
+            </div>
+        </div>
+
+        <div class="info__wrap info__wrap--game-won info__wrap--hide">
+            <div class="info__body info__body--game-won">
+                <h2 class="info__header">You win!</h2>
+                <p>You're the best.</p>
+                <p>Refresh the page to go again.</p>
+            </div>
+        </div>
+
         <div class="map"></div>
         <script src="game-ch7.js"></script>
     </body>
